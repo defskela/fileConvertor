@@ -1,4 +1,4 @@
-package main
+package tgbot
 
 import (
 	"fileConvertor/utils"
@@ -14,7 +14,7 @@ import (
 	"github.com/joho/godotenv"
 )
 
-func main() {
+func StartBot() {
 
 	err := godotenv.Load()
 	if err != nil {
