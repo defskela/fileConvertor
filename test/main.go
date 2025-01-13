@@ -1,4 +1,4 @@
-package fileprocessor
+package main
 
 import (
 	"bytes"
@@ -49,12 +49,11 @@ func initApiKey() error {
 	return nil
 }
 
-func ConvertPDFToWord(fileName string) error {
-
-	logger.Info("На конвертацию отправлен файл с именем", fileName)
+func main() {
+	fileName := "Отчет.pdf"
 	if err := initApiKey(); err != nil {
 		logger.Warn("Failed to initialize API key", err)
-		return err
+		// return err
 	}
 
 	filePath := path.Join("files", fileName)
@@ -62,13 +61,13 @@ func ConvertPDFToWord(fileName string) error {
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		logger.Warn("File not found", "file", filePath)
-		return fmt.Errorf("file %s not found", filePath)
+		// return fmt.Errorf("file %s not found", filePath)
 	}
 
 	fileContent, err := os.ReadFile(filePath)
 	if err != nil {
 		logger.Warn("Error reading file", err)
-		return err
+		// return err
 	}
 	fileBase64 := base64.StdEncoding.EncodeToString(fileContent)
 
@@ -95,13 +94,13 @@ func ConvertPDFToWord(fileName string) error {
 	jsonData, err := json.Marshal(job)
 	if err != nil {
 		logger.Warn("Error marshaling job request", err)
-		return err
+		// return err
 	}
 
 	req, err := http.NewRequest("POST", apiURL+"/jobs", bytes.NewBuffer(jsonData))
 	if err != nil {
 		logger.Warn("Error creating HTTP request", err)
-		return err
+		// return err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+apiKey)
@@ -111,14 +110,14 @@ func ConvertPDFToWord(fileName string) error {
 	resp, err := client.Do(req)
 	if err != nil {
 		logger.Warn("Error sending HTTP request", err)
-		return err
+		// return err
 	}
 	defer resp.Body.Close()
 
 	var jobResp JobResponse
 	if err := json.NewDecoder(resp.Body).Decode(&jobResp); err != nil {
 		logger.Warn("Error decoding job response", err)
-		return err
+		// return err
 	}
 
 	jobID := jobResp.Data.ID
@@ -127,23 +126,21 @@ func ConvertPDFToWord(fileName string) error {
 	for {
 		status, url := checkJobStatus(jobID)
 		if status == "error" {
-			return fmt.Errorf("conversion failed for job %s", jobID)
+			// return fmt.Errorf("conversion failed for job %s", jobID)
 		}
 		if status == "finished" && url != "" {
 			if err := downloadFile(url, "files/output.docx"); err != nil {
 				logger.Warn("Error downloading file", err)
-				return err
+				// return err
 			}
 			break
 		}
-
-		logger.Debug("STATUS", status)
 		logger.Debug("Job processing, retrying in 5 seconds")
 		time.Sleep(5 * time.Second)
 	}
 
 	logger.Info("File successfully converted", "file", "output.docx")
-	return nil
+	// return nil
 }
 
 func checkJobStatus(jobID string) (string, string) {

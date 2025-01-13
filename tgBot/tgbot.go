@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 
 	fileprocessor "fileConvertor/fileProcessor"
 
@@ -21,7 +22,7 @@ func main() {
 		return
 	}
 
-	bot, err := tgbotapi.NewBotAPI(os.Getenv("TOKEN"))
+	bot, err := tgbotapi.NewBotAPI(os.Getenv("BOT_TOKEN"))
 	if err != nil {
 		logger.Error(err)
 		return
@@ -37,12 +38,19 @@ func main() {
 
 	for update := range updates {
 		if update.Message != nil {
-			switch update.Message.Text {
-			case "/start":
-				handleStart(bot, update.Message)
-			case "/convert":
+			logger.Info("Получено сообщение", update.Message.Text, "от", update.Message.From.FirstName, update.Message.From.LastName)
+			if update.Message.IsCommand() {
+				switch update.Message.Command() {
+				case "start":
+					handleStart(bot, update.Message)
+				case "convert":
+					handleConvert(bot, update.Message)
+				default:
+					handleUnknownCommand(bot, update.Message)
+				}
+			} else if update.Message.Document != nil {
 				handleConvert(bot, update.Message)
-			default:
+			} else {
 				handleUnknownCommand(bot, update.Message)
 			}
 		}
@@ -93,10 +101,12 @@ func handleConvert(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 		}
 
 		defer response.Body.Close()
+		filePath := path.Join("files", message.Document.FileName)
 
-		out, err := os.Create(message.Document.FileName)
+		logger.Debug("PATH", filePath)
+		out, err := os.Create(filePath)
 		if err != nil {
-			logger.Debug("Не получилось создать файл: %v", err)
+			logger.Debug("Не получилось создать файл:", err)
 			return
 		}
 		defer out.Close()
@@ -107,6 +117,11 @@ func handleConvert(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 			return
 		}
 
+		msg := tgbotapi.NewMessage(message.Chat.ID, utils.ReceivingFileText)
+		if _, err := bot.Send(msg); err != nil {
+			logger.Warn("Не получилось отправить сообщение о получении файла %v", err)
+		}
+
 		if message.Document.MimeType == "application/pdf" {
 			logger.Info("Файл PDF")
 			fileprocessor.ConvertPDFToWord(message.Document.FileName)
@@ -115,14 +130,27 @@ func handleConvert(bot *tgbotapi.BotAPI, message *tgbotapi.Message) {
 			fileprocessor.ConvertWordToPDF(message.Document.FileName)
 		}
 
-		msg := tgbotapi.NewMessage(message.Chat.ID, utils.ReceivingFileText)
-		if _, err := bot.Send(msg); err != nil {
-			logger.Warn("Не получилось отправить сообщение о получении файла %v", err)
+		resultFile, err := os.Open("files/output.docx")
+		if err != nil {
+			logger.Warn("Failed to open file: %v", err)
 		}
+		defer resultFile.Close()
+
+		doc := tgbotapi.NewDocument(message.Chat.ID, tgbotapi.FileReader{
+			Name:   "output.docx",
+			Reader: resultFile,
+		})
+
+		_, err = bot.Send(doc)
+		if err != nil {
+			logger.Warn("Failed to send document: %v", err)
+		}
+
 	} else {
 		msg := tgbotapi.NewMessage(message.Chat.ID, utils.SendFileText)
 		if _, err := bot.Send(msg); err != nil {
 			logger.Warn("Не получилось отправить сообщение об ожидании файла %v", err)
 		}
 	}
+
 }
